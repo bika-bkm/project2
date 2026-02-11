@@ -1,0 +1,32 @@
+{
+    "users": [
+        {
+            "id": 1,
+            "username": "bika",
+            "email": "bikasniper@gmail.com",
+            "password": "bika2010",
+            "createdAt": "2025-09-05T10:00:00Z"
+        },
+        {
+            "id": 2,
+            "username": "mohamed",
+            "email": "mohammed123@gmail.com",
+            "password": "123456",
+            "createdAt": "2024-10-05T10:00:00Z"
+        }
+    ],
+    "games": [
+        {
+            "id": 1,
+            "title": "Call of Duty",
+            "genre": "Shooter",
+            "platform": "PC"
+        },
+        {
+            "id": 2,
+            "title": "PUBG",
+            "genre": "Battle Royale",
+            "platform": "Mobile"
+        }
+    ]
+}
