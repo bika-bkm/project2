@@ -1,90 +1,124 @@
-// 1. استدعاء المكتبات
-const express = require("express");
-const fs = require("fs");
-const cors = require("cors");
-const helmet = require("helmet");
-const path = require("path");
+// server-raw.js
+const http = require('http');
+const fs = require('fs').promises;
+const path = require('path');
 
+const PORT = 3000;
+const HOST = 'localhost';
 
+// إنشاء السيرفر
+const server = http.createServer(async (req, res) => {
+    // req: يمثل الطلب الوارد
+    // res: يمثل الاستجابة الصادرة
 
-const app = express();
-app.use(express.json()); // عشان السيرفر يفهم JSON
-app.use(cors()); // يسمح للـ Front-End يتكلم معاه
+    const { method, url, headers } = req;
+    const startTime = Date.now();
 
+    console.log(`[${new Date().toISOString()}] ${method} ${url} - بدأ`);
 
-const PORT = 5000;
-
-app.use(express.json());
-
-// 🛡️ Content Security Policy
-app.use(
-    helmet.contentSecurityPolicy({
-        directives: {
-            defaultSrc: ["'self'"], // أي حاجة افتراضية من نفس السيرفر
-            connectSrc: [
-                "'self'",               // السيرفر نفسه
-                "http://127.0.0.1:8000", // السماح بالـ API من هنا
-                "ws://localhost:42877/"  // السماح بالـ WebSocket
-            ]
+    try {
+        // معالجة المسار الرئيسي
+        if (url === '/' && method === 'GET') {
+            res.writeHead(200, {
+                'Content-Type': 'text/html; charset=utf-8',
+                'X-Powered-By': 'Node.js Server'
+            });
+            res.end(`
+                <!DOCTYPE html>
+                <html>
+                    <head><title>سيرفري الخاص</title></head>
+                    <body>
+                        <h1>مرحباً بالعالم من سيرفر Node.js!</h1>
+                        <p>الوقت الحالي: ${new Date()}</p>
+                    </body>
+                </html>
+            `);
         }
-    })
-);
 
-// 🟢 serve frontend files
-app.use(express.static(path.join(__dirname, "../")));
+        // API JSON
+        else if (url === '/api' && method === 'GET') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                message: 'مرحباً من API',
+                status: 'success',
+                timestamp: new Date()
+            }));
+        }
 
-// 3. مساعدة: دالة تقرأ البيانات من db.json
-function readDB() {
-    const data = fs.readFileSync("db.json", "utf8");
-    return JSON.parse(data);
-}
+        // إرسال البيانات (POST)
+        else if (url === '/api/data' && method === 'POST') {
+            let body = '';
 
-// 4. مساعدة: دالة تكتب بيانات جديدة في db.json
-function writeDB(data) {
-    fs.writeFileSync("db.json", JSON.stringify(data, null, 2));
-}
+            // تجميع البيانات القادمة على شكل أجزاء
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
 
-// 5. Route: رجع كل الألعاب
-app.get("/games", (req, res) => {
-    const db = readDB();
-    res.json(db.games);
-});
+            req.on('end', () => {
+                try {
+                    const parsedBody = JSON.parse(body);
+                    res.writeHead(201, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        received: parsedBody,
+                        message: 'تم استلام البيانات بنجاح'
+                    }));
+                } catch (error) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                }
+            });
+        }
 
-// 6. Route: رجع كل المستخدمين
-app.get("/users", (req, res) => {
-    const db = readDB();
-    res.json(db.users);
-});
+        // معالجة الملفات الثابتة
+        else if (url.startsWith('/static/')) {
+            const filePath = path.join(__dirname, 'public', url.slice(8));
+            try {
+                const data = await fs.readFile(filePath);
+                const ext = path.extname(filePath);
+                const mimeTypes = {
+                    '.html': 'text/html',
+                    '.css': 'text/css',
+                    '.js': 'text/javascript',
+                    '.png': 'image/png',
+                    '.jpg': 'image/jpeg',
+                    '.json': 'application/json'
+                };
 
-// 7. Route: تسجيل مستخدم جديد
-app.post("/signup", (req, res) => {
-    const db = readDB();
-    const newUser = {
-        id: db.users.length + 1,
-        username: req.body.username,
-        email: req.body.email,
-        password: req.body.password,
-        createdAt: new Date().toISOString()
-    };
-    db.users.push(newUser);
-    writeDB(db);
-    res.json({ message: "User created!", user: newUser });
-});
+                res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
+                res.end(data);
+            } catch (error) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('File not found');
+            }
+        }
 
-// 8. Route: تسجيل الدخول
-app.post("/login", (req, res) => {
-    const db = readDB();
-    const { email, password } = req.body;
-    const user = db.users.find(u => u.email === email && u.password === password);
+        // المسارات غير الموجودة
+        else {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('404 - الصفحة غير موجودة');
+        }
 
-    if (user) {
-        res.json({ message: "Login successful", user });
-    } else {
-        res.status(401).json({ message: "Invalid credentials" });
+        const duration = Date.now() - startTime;
+        console.log(`[${new Date().toISOString()}] ${method} ${url} - ${res.statusCode} - ${duration}ms`);
+
+    } catch (error) {
+        console.error('خطأ في السيرفر:', error);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 - خطأ داخلي في السيرفر');
     }
 });
 
-// 9. تشغيل السيرفر
-app.listen(5000, () => {
-    console.log("✅ Server running on http://localhost:5000");
+// بدء الاستماع على المنفذ
+server.listen(PORT, HOST, () => {
+    console.log(`🚀 السيرفر يعمل على http://${HOST}:${PORT}`);
+    console.log(`📡 الضغط على Ctrl+C لإيقاف السيرفر`);
+});
+
+// معالجة إيقاف السيرفر بشكل نظيف
+process.on('SIGINT', () => {
+    console.log('\n🛑 جاري إيقاف السيرفر...');
+    server.close(() => {
+        console.log('✅ تم إيقاف السيرفر بنجاح');
+        process.exit(0);
+    });
 });
