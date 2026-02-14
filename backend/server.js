@@ -1,124 +1,175 @@
-// server-raw.js
-const http = require('http');
+// server/server.js
+const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
+const app = express();
 const PORT = 3000;
-const HOST = 'localhost';
+const SECRET_KEY = 'your-secret-key-هذا-سر-جدا';
 
-// إنشاء السيرفر
-const server = http.createServer(async (req, res) => {
-    // req: يمثل الطلب الوارد
-    // res: يمثل الاستجابة الصادرة
+app.use(express.json());
 
-    const { method, url, headers } = req;
-    const startTime = Date.now();
+// ========== قراءة وكتابة قاعدة البيانات ==========
 
-    console.log(`[${new Date().toISOString()}] ${method} ${url} - بدأ`);
+async function readDB() {
+    const data = await fs.readFile(path.join(__dirname, 'db.json'), 'utf8');
+    return JSON.parse(data);
+}
 
+async function writeDB(data) {
+    await fs.writeFile(path.join(__dirname, 'db.json'), JSON.stringify(data, null, 2));
+}
+
+// ========== مسارات المصادقة ==========
+
+// تسجيل الدخول
+app.post('/api/auth/login', async (req, res) => {
     try {
-        // معالجة المسار الرئيسي
-        if (url === '/' && method === 'GET') {
-            res.writeHead(200, {
-                'Content-Type': 'text/html; charset=utf-8',
-                'X-Powered-By': 'Node.js Server'
-            });
-            res.end(`
-                <!DOCTYPE html>
-                <html>
-                    <head><title>سيرفري الخاص</title></head>
-                    <body>
-                        <h1>مرحباً بالعالم من سيرفر Node.js!</h1>
-                        <p>الوقت الحالي: ${new Date()}</p>
-                    </body>
-                </html>
-            `);
+        const { email, password } = req.body;
+        const db = await readDB();
+
+        // البحث عن المستخدم
+        const user = db.users.find(u => u.email === email);
+
+        if (!user) {
+            return res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
         }
 
-        // API JSON
-        else if (url === '/api' && method === 'GET') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                message: 'مرحباً من API',
-                status: 'success',
-                timestamp: new Date()
-            }));
+        // التحقق من كلمة المرور
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
         }
 
-        // إرسال البيانات (POST)
-        else if (url === '/api/data' && method === 'POST') {
-            let body = '';
+        // إنشاء توكن
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            SECRET_KEY,
+            { expiresIn: '24h' }
+        );
 
-            // تجميع البيانات القادمة على شكل أجزاء
-            req.on('data', chunk => {
-                body += chunk.toString();
-            });
+        // إرسال البيانات (بدون كلمة المرور)
+        const { password: _, ...userWithoutPassword } = user;
 
-            req.on('end', () => {
-                try {
-                    const parsedBody = JSON.parse(body);
-                    res.writeHead(201, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({
-                        received: parsedBody,
-                        message: 'تم استلام البيانات بنجاح'
-                    }));
-                } catch (error) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'Invalid JSON' }));
-                }
-            });
-        }
-
-        // معالجة الملفات الثابتة
-        else if (url.startsWith('/static/')) {
-            const filePath = path.join(__dirname, 'public', url.slice(8));
-            try {
-                const data = await fs.readFile(filePath);
-                const ext = path.extname(filePath);
-                const mimeTypes = {
-                    '.html': 'text/html',
-                    '.css': 'text/css',
-                    '.js': 'text/javascript',
-                    '.png': 'image/png',
-                    '.jpg': 'image/jpeg',
-                    '.json': 'application/json'
-                };
-
-                res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
-                res.end(data);
-            } catch (error) {
-                res.writeHead(404, { 'Content-Type': 'text/plain' });
-                res.end('File not found');
-            }
-        }
-
-        // المسارات غير الموجودة
-        else {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('404 - الصفحة غير موجودة');
-        }
-
-        const duration = Date.now() - startTime;
-        console.log(`[${new Date().toISOString()}] ${method} ${url} - ${res.statusCode} - ${duration}ms`);
+        res.json({
+            message: 'تم تسجيل الدخول بنجاح',
+            token,
+            user: userWithoutPassword
+        });
 
     } catch (error) {
-        console.error('خطأ في السيرفر:', error);
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('500 - خطأ داخلي في السيرفر');
+        console.error(error);
+        res.status(500).json({ message: 'خطأ في السيرفر' });
     }
 });
 
-// بدء الاستماع على المنفذ
-server.listen(PORT, HOST, () => {
-    console.log(`🚀 السيرفر يعمل على http://${HOST}:${PORT}`);
-    console.log(`📡 الضغط على Ctrl+C لإيقاف السيرفر`);
+// إنشاء حساب جديد
+app.post('/api/auth/signup', async (req, res) => {
+    try {
+        const { email, password, username, fullName } = req.body;
+        const db = await readDB();
+
+        // التحقق من عدم تكرار البريد
+        if (db.users.some(u => u.email === email)) {
+            return res.status(400).json({ message: 'البريد الإلكتروني مستخدم مسبقاً' });
+        }
+
+        // تشفير كلمة المرور
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // إنشاء مستخدم جديد
+        const newUser = {
+            id: db.users.length + 1,
+            email,
+            username,
+            fullName: fullName || username,
+            password: hashedPassword,
+            role: 'user',
+            createdAt: new Date().toISOString()
+        };
+
+        // حفظ في قاعدة البيانات
+        db.users.push(newUser);
+        await writeDB(db);
+
+        // إرسال الرد (بدون كلمة المرور)
+        const { password: _, ...userWithoutPassword } = newUser;
+
+        res.status(201).json({
+            message: 'تم إنشاء الحساب بنجاح',
+            user: userWithoutPassword
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'خطأ في السيرفر' });
+    }
 });
 
-// معالجة إيقاف السيرفر بشكل نظيف
-process.on('SIGINT', () => {
-    console.log('\n🛑 جاري إيقاف السيرفر...');
-    server.close(() => {
-        console.log('✅ تم إيقاف السيرفر بنجاح');
-        process.exit(0);
+// ========== Middleware التحقق من التوكن ==========
+
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: 'مطلوب تسجيل الدخول' });
+    }
+
+    jwt.verify(token, SECRET_KEY, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'التوكن غير صالح' });
+        }
+        req.user = user;
+        next();
     });
+}
+
+// ========== مسارات محمية ==========
+
+// جلب بيانات المستخدم الحالي
+app.get('/api/users/me', authenticateToken, async (req, res) => {
+    try {
+        const db = await readDB();
+        const user = db.users.find(u => u.id === req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'المستخدم غير موجود' });
+        }
+
+        const { password, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'خطأ في السيرفر' });
+    }
+});
+
+// جلب كل المستخدمين (للمشرفين فقط)
+app.get('/api/users', authenticateToken, async (req, res) => {
+    try {
+        // التحقق من صلاحية المشرف
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'غير مصرح' });
+        }
+
+        const db = await readDB();
+        const users = db.users.map(({ password, ...user }) => user);
+
+        res.json(users);
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'خطأ في السيرفر' });
+    }
+});
+
+// ========== تشغيل السيرفر ==========
+
+app.listen(PORT, () => {
+    console.log(`🚀 السيرفر يعمل على http://localhost:${PORT}`);
+    console.log(`📁 API متاحة على http://localhost:${PORT}/api`);
 });
