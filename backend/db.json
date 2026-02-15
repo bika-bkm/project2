@@ -12,21 +12,7 @@
             "username": "mohamed",
             "email": "mohammed123@gmail.com",
             "password": "123456",
-            "createdAt": "2024-10-05T10:00:00Z"
-        }
-    ],
-    "games": [
-        {
-            "id": 1,
-            "title": "Call of Duty",
-            "genre": "Shooter",
-            "platform": "PC"
-        },
-        {
-            "id": 2,
-            "title": "PUBG",
-            "genre": "Battle Royale",
-            "platform": "Mobile"
+            "createdAt": "2026-01-05T10:00:00Z"
         }
     ]
 }

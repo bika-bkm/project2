@@ -1,12 +1,9 @@
 // public/js/api.js
-// 🔴 هذا الملف وظيفته: التحدث مع السيرفر نيابة عن الصفحات
 
 class API {
     constructor() {
-        this.baseURL = 'http://localhost:3000/api'; // عنوان السيرفر
+        this.baseURL = 'http://localhost:3000/api'; // تأكد من البورت 3000
     }
-
-    // ========== طلبات المصادقة ==========
 
     async login(email, password) {
         try {
@@ -24,13 +21,14 @@ class API {
                 throw new Error(data.message || 'فشل تسجيل الدخول');
             }
 
-            // حفظ البيانات في localStorage
+            // حفظ البيانات
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
 
             return { success: true, data };
 
         } catch (error) {
+            console.error('❌ خطأ في login:', error);
             return { success: false, error: error.message };
         }
     }
@@ -54,11 +52,10 @@ class API {
             return { success: true, data };
 
         } catch (error) {
+            console.error('❌ خطأ في signup:', error);
             return { success: false, error: error.message };
         }
     }
-
-    // ========== طلبات المستخدمين ==========
 
     async getCurrentUser() {
         const token = localStorage.getItem('token');
@@ -83,35 +80,10 @@ class API {
             return { success: true, data };
 
         } catch (error) {
+            console.error('❌ خطأ في getCurrentUser:', error);
             return { success: false, error: error.message };
         }
     }
-
-    async getAllUsers() {
-        const token = localStorage.getItem('token');
-
-        const response = await fetch(`${this.baseURL}/users`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        return response.json();
-    }
-
-    // ========== طلبات المنتجات (مثال) ==========
-
-    async getProducts() {
-        const response = await fetch(`${this.baseURL}/products`);
-        return response.json();
-    }
-
-    async getProductById(id) {
-        const response = await fetch(`${this.baseURL}/products/${id}`);
-        return response.json();
-    }
-
-    // ========== دوال مساعدة ==========
 
     isAuthenticated() {
         return !!localStorage.getItem('token');
@@ -124,5 +96,8 @@ class API {
     }
 }
 
-// إنشاء نسخة واحدة من API للتطبيق كله
+// ✅ مهم جداً: إنشاء نسخة وتصديرها
 const api = new API();
+
+// للاستخدام في الملفات الأخرى
+window.api = api; // متاح في كل الصفحات

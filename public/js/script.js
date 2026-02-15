@@ -1,36 +1,8 @@
-// public/js/script.js
-import { api } from './api.js';
+// اختبر إذا كان api موجود
+console.log(window.api);
 
-document.addEventListener('DOMContentLoaded', async () => {
-
-    // التحقق من تسجيل الدخول
-    if (!api.isAuthenticated()) {
-        window.location.href = '/login.html';
-        return;
-    }
-
-    // جلب بيانات المستخدم الحالي
-    const result = await api.getCurrentUser();
-
-    if (result.success) {
-        // عرض اسم المستخدم
-        const welcomeMsg = document.getElementById('welcomeMsg');
-        if (welcomeMsg) {
-            welcomeMsg.textContent = `👋 مرحباً ${result.data.fullName || result.data.email}`;
-        }
-
-        console.log('✅ المستخدم الحالي:', result.data);
-    } else {
-        // التوكن غير صالح
-        api.logout();
-    }
-
-    // زر تسجيل الخروج
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            api.logout();
-        });
-    }
-});
+// اختبر الاتصال بالسيرفر
+fetch('http://localhost:3000/api/test')
+    .then(res => res.json())
+    .then(data => console.log('✅ السيرفر شغال:', data))
+    .catch(err => console.error('❌ السيرفر مش شغال:', err));
